@@ -1,0 +1,600 @@
+[
+  {
+    "id": "069d38a2-ed5a-4dde-8580-cce91c77b406",
+    "workId": "6a82ae21-2735-4ec5-b4e8-39b98d8da4da",
+    "type": "click",
+    "timestamp": 1782358757350
+  },
+  {
+    "id": "6d96252a-07f2-47f4-a1bc-4d8dcfde7390",
+    "workId": "6a82ae21-2735-4ec5-b4e8-39b98d8da4da",
+    "type": "duration",
+    "duration": 45,
+    "timestamp": 1782358757460
+  },
+  {
+    "id": "8c92ff6a-0e1a-42fc-ba43-18486d2330d4",
+    "workId": "12d1473d-c93b-4ba4-b847-2f5eddea6476",
+    "type": "click",
+    "timestamp": 1782354695343
+  },
+  {
+    "id": "fc1a6d76-73e3-4b28-95cf-cf8745afa909",
+    "workId": "12d1473d-c93b-4ba4-b847-2f5eddea6476",
+    "type": "duration",
+    "duration": 85,
+    "timestamp": 1782358775352
+  },
+  {
+    "id": "f5020d71-969e-40fb-b30f-985d4cf0399c",
+    "workId": "12d1473d-c93b-4ba4-b847-2f5eddea6476",
+    "type": "click",
+    "timestamp": 1782352895356
+  },
+  {
+    "id": "04380b0c-9fc1-4b5b-b536-2b89269e9d0c",
+    "workId": "12d1473d-c93b-4ba4-b847-2f5eddea6476",
+    "type": "duration",
+    "duration": 40,
+    "timestamp": 1782358775359
+  },
+  {
+    "id": "d38a1d8a-9bda-4886-ab5d-063e719ef370",
+    "workId": "12d1473d-c93b-4ba4-b847-2f5eddea6476",
+    "type": "click",
+    "timestamp": 1782358355360
+  },
+  {
+    "id": "4231442c-8383-4fd4-b3cf-9bf50954d716",
+    "workId": "12d1473d-c93b-4ba4-b847-2f5eddea6476",
+    "type": "duration",
+    "duration": 34,
+    "timestamp": 1782358775363
+  },
+  {
+    "id": "ba46cec1-442c-4f0a-8ac4-423d19417f18",
+    "workId": "12d1473d-c93b-4ba4-b847-2f5eddea6476",
+    "type": "click",
+    "timestamp": 1782357815364
+  },
+  {
+    "id": "07556822-6a6b-45c6-9883-93e54a36663d",
+    "workId": "12d1473d-c93b-4ba4-b847-2f5eddea6476",
+    "type": "duration",
+    "duration": 98,
+    "timestamp": 1782358775366
+  },
+  {
+    "id": "17ca24dd-a40b-499d-9ace-3415ec3f9a2f",
+    "workId": "12d1473d-c93b-4ba4-b847-2f5eddea6476",
+    "type": "click",
+    "timestamp": 1782353735368
+  },
+  {
+    "id": "2e1922f3-3aef-4670-ba10-da2d12ab25c2",
+    "workId": "12d1473d-c93b-4ba4-b847-2f5eddea6476",
+    "type": "duration",
+    "duration": 118,
+    "timestamp": 1782358775370
+  },
+  {
+    "id": "b73fda7d-feda-450f-946e-c8d072210612",
+    "workId": "12d1473d-c93b-4ba4-b847-2f5eddea6476",
+    "type": "click",
+    "timestamp": 1782354755371
+  },
+  {
+    "id": "1de3bf3e-725d-4f4a-adb1-d7c55c9a92b2",
+    "workId": "12d1473d-c93b-4ba4-b847-2f5eddea6476",
+    "type": "duration",
+    "duration": 109,
+    "timestamp": 1782358775373
+  },
+  {
+    "id": "8a2b3025-7f1b-416e-82ca-bcd2a9b9aa6b",
+    "workId": "12d1473d-c93b-4ba4-b847-2f5eddea6476",
+    "type": "click",
+    "timestamp": 1782354515375
+  },
+  {
+    "id": "2d4d5ce1-c9d6-442d-85a0-de059c29b9bc",
+    "workId": "12d1473d-c93b-4ba4-b847-2f5eddea6476",
+    "type": "duration",
+    "duration": 79,
+    "timestamp": 1782358775377
+  },
+  {
+    "id": "7de40bf2-4a69-47a5-9924-1f6bc22ec8d7",
+    "workId": "12d1473d-c93b-4ba4-b847-2f5eddea6476",
+    "type": "click",
+    "timestamp": 1782353375379
+  },
+  {
+    "id": "74d5890a-217d-4d11-9c93-5ab53d61bd94",
+    "workId": "12d1473d-c93b-4ba4-b847-2f5eddea6476",
+    "type": "duration",
+    "duration": 41,
+    "timestamp": 1782358775381
+  },
+  {
+    "id": "523b0d0d-d80b-44b5-ae7c-db91ce31d211",
+    "workId": "12d1473d-c93b-4ba4-b847-2f5eddea6476",
+    "type": "click",
+    "timestamp": 1782351995384
+  },
+  {
+    "id": "f87f40dc-d89a-474a-be90-187b629e35f7",
+    "workId": "12d1473d-c93b-4ba4-b847-2f5eddea6476",
+    "type": "duration",
+    "duration": 27,
+    "timestamp": 1782358775385
+  },
+  {
+    "id": "de14503d-f379-48c6-a1e7-83510da17668",
+    "workId": "2e6ef765-4729-4563-99b5-67ff64d1623b",
+    "type": "click",
+    "timestamp": 1782358295392
+  },
+  {
+    "id": "3a73d367-170d-4dfb-a556-34fec2fdb9e7",
+    "workId": "2e6ef765-4729-4563-99b5-67ff64d1623b",
+    "type": "duration",
+    "duration": 47,
+    "timestamp": 1782358775393
+  },
+  {
+    "id": "780effc4-2638-404c-813e-57136719bbaf",
+    "workId": "2e6ef765-4729-4563-99b5-67ff64d1623b",
+    "type": "click",
+    "timestamp": 1782355115395
+  },
+  {
+    "id": "60b93748-0219-43d9-8e6b-a231dba32e1c",
+    "workId": "2e6ef765-4729-4563-99b5-67ff64d1623b",
+    "type": "duration",
+    "duration": 27,
+    "timestamp": 1782358775398
+  },
+  {
+    "id": "84208098-765d-4e7c-8dc9-32018babe974",
+    "workId": "2e6ef765-4729-4563-99b5-67ff64d1623b",
+    "type": "click",
+    "timestamp": 1782358535400
+  },
+  {
+    "id": "2e7bcffc-aae0-4117-a746-a63bfadcb38b",
+    "workId": "2e6ef765-4729-4563-99b5-67ff64d1623b",
+    "type": "duration",
+    "duration": 56,
+    "timestamp": 1782358775403
+  },
+  {
+    "id": "76ea10bd-c1d2-48dc-9fce-cec2ce2026d5",
+    "workId": "2e6ef765-4729-4563-99b5-67ff64d1623b",
+    "type": "click",
+    "timestamp": 1782358595405
+  },
+  {
+    "id": "ae24b1cc-130c-41e0-863c-69f3ccb9a8ee",
+    "workId": "2e6ef765-4729-4563-99b5-67ff64d1623b",
+    "type": "duration",
+    "duration": 58,
+    "timestamp": 1782358775407
+  },
+  {
+    "id": "5427d44f-7f7f-41ce-8dbe-9eaf5ca2add3",
+    "workId": "2e6ef765-4729-4563-99b5-67ff64d1623b",
+    "type": "click",
+    "timestamp": 1782358295410
+  },
+  {
+    "id": "e482962c-08f5-4698-bb69-5700b99839d5",
+    "workId": "2e6ef765-4729-4563-99b5-67ff64d1623b",
+    "type": "duration",
+    "duration": 58,
+    "timestamp": 1782358775412
+  },
+  {
+    "id": "09bdea98-cd98-431a-85db-4d52d4359a84",
+    "workId": "2e6ef765-4729-4563-99b5-67ff64d1623b",
+    "type": "click",
+    "timestamp": 1782352115414
+  },
+  {
+    "id": "684c870c-102d-4461-a120-02053fbd36fa",
+    "workId": "2e6ef765-4729-4563-99b5-67ff64d1623b",
+    "type": "duration",
+    "duration": 111,
+    "timestamp": 1782358775418
+  },
+  {
+    "id": "303d038e-adaf-4bab-8f50-5d21465664b8",
+    "workId": "2e6ef765-4729-4563-99b5-67ff64d1623b",
+    "type": "click",
+    "timestamp": 1782354695419
+  },
+  {
+    "id": "b37b6883-0218-4ba5-be16-367623805f5c",
+    "workId": "2e6ef765-4729-4563-99b5-67ff64d1623b",
+    "type": "duration",
+    "duration": 119,
+    "timestamp": 1782358775421
+  },
+  {
+    "id": "30c4d47d-fd54-4dbc-bd5d-fa802ae63df0",
+    "workId": "2e6ef765-4729-4563-99b5-67ff64d1623b",
+    "type": "click",
+    "timestamp": 1782357935423
+  },
+  {
+    "id": "c96ec5c2-da7c-4e31-9b29-a6704f8d8d8e",
+    "workId": "2e6ef765-4729-4563-99b5-67ff64d1623b",
+    "type": "duration",
+    "duration": 111,
+    "timestamp": 1782358775424
+  },
+  {
+    "id": "18558def-cd7d-4413-9fe2-0a921f8f165b",
+    "workId": "2e6ef765-4729-4563-99b5-67ff64d1623b",
+    "type": "click",
+    "timestamp": 1782358475425
+  },
+  {
+    "id": "d1c5cf14-685e-410d-83bc-aab264d8b66b",
+    "workId": "2e6ef765-4729-4563-99b5-67ff64d1623b",
+    "type": "duration",
+    "duration": 83,
+    "timestamp": 1782358775427
+  },
+  {
+    "id": "948ff897-02f7-4ee0-9d42-b5743abf5322",
+    "workId": "2e6ef765-4729-4563-99b5-67ff64d1623b",
+    "type": "click",
+    "timestamp": 1782356195430
+  },
+  {
+    "id": "f4a5e097-e113-43e6-82d4-c60356b1f247",
+    "workId": "2e6ef765-4729-4563-99b5-67ff64d1623b",
+    "type": "duration",
+    "duration": 90,
+    "timestamp": 1782358775432
+  },
+  {
+    "id": "412267a3-c9ab-4955-9e09-63416e9bda4d",
+    "workId": "2e6ef765-4729-4563-99b5-67ff64d1623b",
+    "type": "click",
+    "timestamp": 1782352775434
+  },
+  {
+    "id": "69bfc052-a22a-4dfc-982d-d512dcc8ea6f",
+    "workId": "2e6ef765-4729-4563-99b5-67ff64d1623b",
+    "type": "duration",
+    "duration": 83,
+    "timestamp": 1782358775435
+  },
+  {
+    "id": "89be5a39-b906-41ef-8b00-bb6490588a75",
+    "workId": "2e6ef765-4729-4563-99b5-67ff64d1623b",
+    "type": "click",
+    "timestamp": 1782357815436
+  },
+  {
+    "id": "bee1ae4f-a3c5-4296-8c47-bd3c6c207dcc",
+    "workId": "2e6ef765-4729-4563-99b5-67ff64d1623b",
+    "type": "duration",
+    "duration": 55,
+    "timestamp": 1782358775439
+  },
+  {
+    "id": "bafbf44b-e3d6-48aa-96a1-5d7c3e250c72",
+    "workId": "2e6ef765-4729-4563-99b5-67ff64d1623b",
+    "type": "click",
+    "timestamp": 1782356435440
+  },
+  {
+    "id": "f8f82cc3-50ff-4391-bafb-5c3fef30b440",
+    "workId": "2e6ef765-4729-4563-99b5-67ff64d1623b",
+    "type": "duration",
+    "duration": 54,
+    "timestamp": 1782358775442
+  },
+  {
+    "id": "8a0e537c-5a74-4de5-9f33-4d6458d83b7f",
+    "workId": "8fc092d4-d02a-4401-a92c-c21d2e329c13",
+    "type": "click",
+    "timestamp": 1782355295445
+  },
+  {
+    "id": "0b6c1e81-e59c-4aaf-ac86-f01cb90bef22",
+    "workId": "8fc092d4-d02a-4401-a92c-c21d2e329c13",
+    "type": "duration",
+    "duration": 69,
+    "timestamp": 1782358775448
+  },
+  {
+    "id": "f9e25984-fd1e-4ea2-b693-8133d4d11c95",
+    "workId": "8fc092d4-d02a-4401-a92c-c21d2e329c13",
+    "type": "click",
+    "timestamp": 1782356435449
+  },
+  {
+    "id": "6790466a-4c6a-42e3-bfe1-dc3bfb9e6eb1",
+    "workId": "8fc092d4-d02a-4401-a92c-c21d2e329c13",
+    "type": "duration",
+    "duration": 100,
+    "timestamp": 1782358775451
+  },
+  {
+    "id": "e8d70a3b-e96c-4879-a887-c1d0cecb8c35",
+    "workId": "8fc092d4-d02a-4401-a92c-c21d2e329c13",
+    "type": "click",
+    "timestamp": 1782355235453
+  },
+  {
+    "id": "0cdcc302-c236-4baf-997a-5de941723ade",
+    "workId": "8fc092d4-d02a-4401-a92c-c21d2e329c13",
+    "type": "duration",
+    "duration": 69,
+    "timestamp": 1782358775455
+  },
+  {
+    "id": "d89154fa-4905-4e98-915c-82055ae8ff08",
+    "workId": "8fc092d4-d02a-4401-a92c-c21d2e329c13",
+    "type": "click",
+    "timestamp": 1782354935457
+  },
+  {
+    "id": "d5e50b5c-909a-4d10-a705-5fe621d8233d",
+    "workId": "8fc092d4-d02a-4401-a92c-c21d2e329c13",
+    "type": "duration",
+    "duration": 24,
+    "timestamp": 1782358775458
+  },
+  {
+    "id": "5ee9ef03-419b-4940-a587-17a4a714bcc4",
+    "workId": "8fc092d4-d02a-4401-a92c-c21d2e329c13",
+    "type": "click",
+    "timestamp": 1782356855459
+  },
+  {
+    "id": "4364a09d-02c1-45d6-994c-8176dbe97945",
+    "workId": "8fc092d4-d02a-4401-a92c-c21d2e329c13",
+    "type": "duration",
+    "duration": 31,
+    "timestamp": 1782358775462
+  },
+  {
+    "id": "78281d27-3169-4cad-b21e-8a84397ab944",
+    "workId": "8fc092d4-d02a-4401-a92c-c21d2e329c13",
+    "type": "click",
+    "timestamp": 1782354935463
+  },
+  {
+    "id": "90d5952f-31d4-45b9-a617-9e7535e45bb7",
+    "workId": "8fc092d4-d02a-4401-a92c-c21d2e329c13",
+    "type": "duration",
+    "duration": 119,
+    "timestamp": 1782358775465
+  },
+  {
+    "id": "820fb2b2-d2a3-42da-b031-f4769aaf6262",
+    "workId": "8fc092d4-d02a-4401-a92c-c21d2e329c13",
+    "type": "click",
+    "timestamp": 1782355235467
+  },
+  {
+    "id": "fc678b3c-f9d9-4a32-8b93-ebbb58adc996",
+    "workId": "8fc092d4-d02a-4401-a92c-c21d2e329c13",
+    "type": "duration",
+    "duration": 27,
+    "timestamp": 1782358775470
+  },
+  {
+    "id": "716d4fbf-09ae-4bd0-8971-c0a890bdf2f9",
+    "workId": "8fc092d4-d02a-4401-a92c-c21d2e329c13",
+    "type": "click",
+    "timestamp": 1782357035471
+  },
+  {
+    "id": "4cd414f6-857f-4462-8162-b340821ec877",
+    "workId": "8fc092d4-d02a-4401-a92c-c21d2e329c13",
+    "type": "duration",
+    "duration": 69,
+    "timestamp": 1782358775472
+  },
+  {
+    "id": "d365b732-4d60-4ad3-9904-fd8ea05c0751",
+    "workId": "8fc092d4-d02a-4401-a92c-c21d2e329c13",
+    "type": "click",
+    "timestamp": 1782352595474
+  },
+  {
+    "id": "61af6550-52c5-4d05-8720-f21cce7d6b6e",
+    "workId": "8fc092d4-d02a-4401-a92c-c21d2e329c13",
+    "type": "duration",
+    "duration": 66,
+    "timestamp": 1782358775476
+  },
+  {
+    "id": "0ad24c90-a13e-4d92-8ad8-65c94bd77350",
+    "workId": "8fc092d4-d02a-4401-a92c-c21d2e329c13",
+    "type": "click",
+    "timestamp": 1782355775478
+  },
+  {
+    "id": "66470d34-f845-4208-9a62-d57f5b0a83c9",
+    "workId": "8fc092d4-d02a-4401-a92c-c21d2e329c13",
+    "type": "duration",
+    "duration": 105,
+    "timestamp": 1782358775479
+  },
+  {
+    "id": "a011c341-5180-44b3-b575-eb25bf38da3c",
+    "workId": "dd9d6e29-c7e3-4ae4-877e-8306c45f0613",
+    "type": "click",
+    "timestamp": 1782357575483
+  },
+  {
+    "id": "a0cd2fd1-0480-48a7-9271-4c25c988bfbe",
+    "workId": "dd9d6e29-c7e3-4ae4-877e-8306c45f0613",
+    "type": "duration",
+    "duration": 115,
+    "timestamp": 1782358775485
+  },
+  {
+    "id": "d21a8c81-006e-4d08-b190-116f88305c4e",
+    "workId": "dd9d6e29-c7e3-4ae4-877e-8306c45f0613",
+    "type": "click",
+    "timestamp": 1782354635487
+  },
+  {
+    "id": "565bc8d0-180e-4a36-bf23-fd7524103080",
+    "workId": "dd9d6e29-c7e3-4ae4-877e-8306c45f0613",
+    "type": "duration",
+    "duration": 75,
+    "timestamp": 1782358775489
+  },
+  {
+    "id": "85cbec6e-a23b-4c3a-9401-f91d78e7e6e1",
+    "workId": "dd9d6e29-c7e3-4ae4-877e-8306c45f0613",
+    "type": "click",
+    "timestamp": 1782355655491
+  },
+  {
+    "id": "194897c2-2ec2-4925-b809-8bfa12bb4d68",
+    "workId": "dd9d6e29-c7e3-4ae4-877e-8306c45f0613",
+    "type": "duration",
+    "duration": 106,
+    "timestamp": 1782358775492
+  },
+  {
+    "id": "0229854e-18c3-420a-8c5b-c1dea8379010",
+    "workId": "dd9d6e29-c7e3-4ae4-877e-8306c45f0613",
+    "type": "click",
+    "timestamp": 1782356195493
+  },
+  {
+    "id": "1788ac0f-b340-49f7-91d1-a45d14d1ac7c",
+    "workId": "dd9d6e29-c7e3-4ae4-877e-8306c45f0613",
+    "type": "duration",
+    "duration": 72,
+    "timestamp": 1782358775496
+  },
+  {
+    "id": "82587975-955a-4086-bf15-5fb6f834d263",
+    "workId": "dd9d6e29-c7e3-4ae4-877e-8306c45f0613",
+    "type": "click",
+    "timestamp": 1782351875498
+  },
+  {
+    "id": "fbb4dca8-558a-431f-9443-ab55dad323e2",
+    "workId": "dd9d6e29-c7e3-4ae4-877e-8306c45f0613",
+    "type": "duration",
+    "duration": 99,
+    "timestamp": 1782358775500
+  },
+  {
+    "id": "ac93b7c2-e849-4f42-b6c8-622dbc912cd8",
+    "workId": "dd9d6e29-c7e3-4ae4-877e-8306c45f0613",
+    "type": "click",
+    "timestamp": 1782358055502
+  },
+  {
+    "id": "55c5692e-bd6b-4105-a221-18d7002c148b",
+    "workId": "dd9d6e29-c7e3-4ae4-877e-8306c45f0613",
+    "type": "duration",
+    "duration": 17,
+    "timestamp": 1782358775503
+  },
+  {
+    "id": "3486f904-7171-492f-b86f-239ab3da315d",
+    "workId": "dd9d6e29-c7e3-4ae4-877e-8306c45f0613",
+    "type": "click",
+    "timestamp": 1782355895505
+  },
+  {
+    "id": "10c448e9-73be-4eb1-a3b5-e9f2eebc7ac8",
+    "workId": "dd9d6e29-c7e3-4ae4-877e-8306c45f0613",
+    "type": "duration",
+    "duration": 104,
+    "timestamp": 1782358775507
+  },
+  {
+    "id": "88de693f-354c-4f2a-a803-e7452b99ac66",
+    "workId": "dd9d6e29-c7e3-4ae4-877e-8306c45f0613",
+    "type": "click",
+    "timestamp": 1782356675509
+  },
+  {
+    "id": "5e08df5c-dac3-4928-96b1-11720484f991",
+    "workId": "dd9d6e29-c7e3-4ae4-877e-8306c45f0613",
+    "type": "duration",
+    "duration": 86,
+    "timestamp": 1782358775510
+  },
+  {
+    "id": "1f0a0cce-89de-4fa9-b817-318d62533abe",
+    "workId": "dd9d6e29-c7e3-4ae4-877e-8306c45f0613",
+    "type": "click",
+    "timestamp": 1782356375512
+  },
+  {
+    "id": "67660bdb-6285-469e-a185-e3ba26b754b9",
+    "workId": "dd9d6e29-c7e3-4ae4-877e-8306c45f0613",
+    "type": "duration",
+    "duration": 37,
+    "timestamp": 1782358775513
+  },
+  {
+    "id": "986ce280-dc42-4c3e-b389-e505f09dbf07",
+    "workId": "dd9d6e29-c7e3-4ae4-877e-8306c45f0613",
+    "type": "click",
+    "timestamp": 1782351755516
+  },
+  {
+    "id": "96daa814-2075-4397-b892-8461bb76e8a4",
+    "workId": "dd9d6e29-c7e3-4ae4-877e-8306c45f0613",
+    "type": "duration",
+    "duration": 25,
+    "timestamp": 1782358775518
+  },
+  {
+    "id": "8d49347e-7960-440c-8f7d-42e4a1639259",
+    "workId": "dd9d6e29-c7e3-4ae4-877e-8306c45f0613",
+    "type": "click",
+    "timestamp": 1782358295520
+  },
+  {
+    "id": "f2a3847d-45f7-45e6-bd07-832aeef6407a",
+    "workId": "dd9d6e29-c7e3-4ae4-877e-8306c45f0613",
+    "type": "duration",
+    "duration": 80,
+    "timestamp": 1782358775523
+  },
+  {
+    "id": "04834c31-4db3-4b81-8083-b4fc11bb5439",
+    "workId": "b90024cb-f3a3-4bc5-818d-0eac43e834df",
+    "type": "click",
+    "timestamp": 1782351755526
+  },
+  {
+    "id": "5f4dad2c-3989-459f-a8eb-a18f17c0e44c",
+    "workId": "b90024cb-f3a3-4bc5-818d-0eac43e834df",
+    "type": "duration",
+    "duration": 23,
+    "timestamp": 1782358775527
+  },
+  {
+    "id": "590bd34f-1b3e-4151-b8ed-51c308eb5ebf",
+    "workId": "b90024cb-f3a3-4bc5-818d-0eac43e834df",
+    "type": "click",
+    "timestamp": 1782353675529
+  },
+  {
+    "id": "69c7faf0-bc87-43f4-99a6-11fd5bfe1087",
+    "workId": "b90024cb-f3a3-4bc5-818d-0eac43e834df",
+    "type": "duration",
+    "duration": 53,
+    "timestamp": 1782358775530
+  }
+]
