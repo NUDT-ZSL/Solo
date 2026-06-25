@@ -1,0 +1,16 @@
+{
+  "name": "pixel-roguelike",
+  "version": "1.0.0",
+  "description": "Pixel-style Roguelike dungeon explorer",
+  "type": "module",
+  "scripts": {
+    "dev": "vite",
+    "build": "vite build"
+  },
+  "devDependencies": {
+    "typescript": "^5.3.3",
+    "vite": "^5.0.10",
+    "@typescript-eslint/eslint-plugin": "^6.15.0",
+    "@typescript-eslint/parser": "^6.15.0"
+  }
+}
