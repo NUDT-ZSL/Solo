@@ -1,0 +1,234 @@
+{
+  "gardens": [
+    {
+      "id": "garden-1",
+      "name": "阳光社区花园",
+      "plotIds": [
+        "plot-1",
+        "plot-2",
+        "plot-3",
+        "plot-4",
+        "plot-5"
+      ]
+    }
+  ],
+  "plots": [
+    {
+      "id": "plot-1",
+      "gardenId": "garden-1",
+      "number": "A-01",
+      "width": 3,
+      "height": 5,
+      "status": "adopted",
+      "adopterId": "user-1",
+      "cropName": "番茄",
+      "lastWateredAt": "2026-06-25T02:31:14.215Z",
+      "journals": [
+        {
+          "id": "journal-1",
+          "plotId": "plot-1",
+          "userId": "user-1",
+          "cropVariety": "大番茄",
+          "description": "今天移栽了番茄苗，希望它们能好好长大！",
+          "imageUrl": "",
+          "createdAt": "2026-06-23T09:00:00Z"
+        },
+        {
+          "id": "journal-2",
+          "plotId": "plot-1",
+          "userId": "user-1",
+          "cropVariety": "大番茄",
+          "description": "番茄苗已经缓过来了，叶子舒展了很多",
+          "imageUrl": "",
+          "createdAt": "2026-06-25T10:00:00Z"
+        }
+      ],
+      "checkIns": [
+        {
+          "id": "ci-1",
+          "plotId": "plot-1",
+          "userId": "user-1",
+          "type": "water",
+          "createdAt": "2026-06-25T08:00:00Z"
+        },
+        {
+          "id": "ci-2",
+          "plotId": "plot-1",
+          "userId": "user-1",
+          "type": "fertilize",
+          "createdAt": "2026-06-25T09:00:00Z"
+        },
+        {
+          "id": "d3e74c24-cd44-493e-aa77-49e5240ba73e",
+          "plotId": "plot-1",
+          "userId": "user-1",
+          "type": "water",
+          "createdAt": "2026-06-25T02:31:14.215Z"
+        }
+      ]
+    },
+    {
+      "id": "plot-2",
+      "gardenId": "garden-1",
+      "number": "A-02",
+      "width": 3,
+      "height": 5,
+      "status": "adopted",
+      "adopterId": "user-1",
+      "cropName": "黄瓜",
+      "lastWateredAt": "2026-06-24T16:00:00Z",
+      "journals": [
+        {
+          "id": "journal-3",
+          "plotId": "plot-2",
+          "userId": "user-1",
+          "cropVariety": "旱黄瓜",
+          "description": "播种了黄瓜种子，覆膜保温",
+          "imageUrl": "",
+          "createdAt": "2026-06-22T14:00:00Z"
+        }
+      ],
+      "checkIns": [
+        {
+          "id": "ci-3",
+          "plotId": "plot-2",
+          "userId": "user-1",
+          "type": "water",
+          "createdAt": "2026-06-24T16:00:00Z"
+        }
+      ]
+    },
+    {
+      "id": "plot-3",
+      "gardenId": "garden-1",
+      "number": "A-03",
+      "width": 3,
+      "height": 5,
+      "status": "vacant",
+      "adopterId": null,
+      "cropName": null,
+      "lastWateredAt": null,
+      "journals": [],
+      "checkIns": []
+    },
+    {
+      "id": "plot-4",
+      "gardenId": "garden-1",
+      "number": "A-04",
+      "width": 3,
+      "height": 5,
+      "status": "vacant",
+      "adopterId": null,
+      "cropName": null,
+      "lastWateredAt": null,
+      "journals": [],
+      "checkIns": []
+    },
+    {
+      "id": "plot-5",
+      "gardenId": "garden-1",
+      "number": "A-05",
+      "width": 3,
+      "height": 5,
+      "status": "vacant",
+      "adopterId": null,
+      "cropName": null,
+      "lastWateredAt": null,
+      "journals": [],
+      "checkIns": []
+    }
+  ],
+  "users": [
+    {
+      "id": "user-1",
+      "name": "小明",
+      "avatar": "🧑‍🌾"
+    }
+  ],
+  "dailyScores": [
+    {
+      "plotId": "plot-1",
+      "userId": "user-1",
+      "date": "2026-06-19",
+      "score": 5
+    },
+    {
+      "plotId": "plot-1",
+      "userId": "user-1",
+      "date": "2026-06-20",
+      "score": 8
+    },
+    {
+      "plotId": "plot-1",
+      "userId": "user-1",
+      "date": "2026-06-21",
+      "score": 6
+    },
+    {
+      "plotId": "plot-1",
+      "userId": "user-1",
+      "date": "2026-06-22",
+      "score": 11
+    },
+    {
+      "plotId": "plot-1",
+      "userId": "user-1",
+      "date": "2026-06-23",
+      "score": 7
+    },
+    {
+      "plotId": "plot-1",
+      "userId": "user-1",
+      "date": "2026-06-24",
+      "score": 9
+    },
+    {
+      "plotId": "plot-1",
+      "userId": "user-1",
+      "date": "2026-06-25",
+      "score": 8
+    },
+    {
+      "plotId": "plot-2",
+      "userId": "user-1",
+      "date": "2026-06-19",
+      "score": 3
+    },
+    {
+      "plotId": "plot-2",
+      "userId": "user-1",
+      "date": "2026-06-20",
+      "score": 5
+    },
+    {
+      "plotId": "plot-2",
+      "userId": "user-1",
+      "date": "2026-06-21",
+      "score": 4
+    },
+    {
+      "plotId": "plot-2",
+      "userId": "user-1",
+      "date": "2026-06-22",
+      "score": 6
+    },
+    {
+      "plotId": "plot-2",
+      "userId": "user-1",
+      "date": "2026-06-23",
+      "score": 2
+    },
+    {
+      "plotId": "plot-2",
+      "userId": "user-1",
+      "date": "2026-06-24",
+      "score": 5
+    },
+    {
+      "plotId": "plot-2",
+      "userId": "user-1",
+      "date": "2026-06-25",
+      "score": 2
+    }
+  ]
+}
