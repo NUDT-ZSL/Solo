@@ -1,0 +1,96 @@
+{
+  "users": [],
+  "teas": [
+    {
+      "userId": "mqsw6ajeh9jxuvp8",
+      "name": "西湖龙井",
+      "origin": "浙江杭州",
+      "year": 2024,
+      "imageUrl": "data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='200' height='200' viewBox='0 0 200 200'><defs><linearGradient id='g' x1='0' y1='0' x2='1' y2='1'><stop offset='0%' stop-color='#e8f5e9'/><stop offset='100%' stop-color='#a5d6a7'/></linearGradient></defs><rect width='200' height='200' fill='url(#g)'/><text x='50%' y='52%' dominant-baseline='middle' text-anchor='middle' font-size='72'>🍵</text><text x='50%' y='88%' dominant-baseline='middle' text-anchor='middle' font-size='16' font-weight='bold' fill='#5d4037' font-family='sans-serif'>龙</text></svg>",
+      "isFavorite": false,
+      "id": "mqswixsytdwink03",
+      "createdAt": "2026-06-25T02:47:15.106Z"
+    },
+    {
+      "userId": "mqsw6ajeh9jxuvp8",
+      "name": "西湖龙井",
+      "origin": "浙江杭州",
+      "year": 2024,
+      "imageUrl": "data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='200' height='200' viewBox='0 0 200 200'><defs><linearGradient id='g' x1='0' y1='0' x2='1' y2='1'><stop offset='0%' stop-color='#e8f5e9'/><stop offset='100%' stop-color='#a5d6a7'/></linearGradient></defs><rect width='200' height='200' fill='url(#g)'/><text x='50%' y='52%' dominant-baseline='middle' text-anchor='middle' font-size='72'>🍵</text><text x='50%' y='88%' dominant-baseline='middle' text-anchor='middle' font-size='16' font-weight='bold' fill='#5d4037' font-family='sans-serif'>龙</text></svg>",
+      "isFavorite": false,
+      "id": "mqswixt0m9wxtfrt",
+      "createdAt": "2026-06-25T02:47:15.108Z"
+    },
+    {
+      "userId": "mqsw6ajeh9jxuvp8",
+      "name": "云南普洱",
+      "origin": "云南西双版纳",
+      "year": 2020,
+      "imageUrl": "data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='200' height='200' viewBox='0 0 200 200'><defs><linearGradient id='g' x1='0' y1='0' x2='1' y2='1'><stop offset='0%' stop-color='#fce4ec'/><stop offset='100%' stop-color='#f48fb1'/></linearGradient></defs><rect width='200' height='200' fill='url(#g)'/><text x='50%' y='52%' dominant-baseline='middle' text-anchor='middle' font-size='72'>🍃</text><text x='50%' y='88%' dominant-baseline='middle' text-anchor='middle' font-size='16' font-weight='bold' fill='#5d4037' font-family='sans-serif'>普</text></svg>",
+      "isFavorite": false,
+      "id": "mqswixtdmm57n7ip",
+      "createdAt": "2026-06-25T02:47:15.121Z"
+    },
+    {
+      "userId": "mqsw6ajeh9jxuvp8",
+      "name": "云南普洱",
+      "origin": "云南西双版纳",
+      "year": 2020,
+      "imageUrl": "data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='200' height='200' viewBox='0 0 200 200'><defs><linearGradient id='g' x1='0' y1='0' x2='1' y2='1'><stop offset='0%' stop-color='#fce4ec'/><stop offset='100%' stop-color='#f48fb1'/></linearGradient></defs><rect width='200' height='200' fill='url(#g)'/><text x='50%' y='52%' dominant-baseline='middle' text-anchor='middle' font-size='72'>🍃</text><text x='50%' y='88%' dominant-baseline='middle' text-anchor='middle' font-size='16' font-weight='bold' fill='#5d4037' font-family='sans-serif'>普</text></svg>",
+      "isFavorite": false,
+      "id": "mqswixtgak9449yf",
+      "createdAt": "2026-06-25T02:47:15.124Z"
+    },
+    {
+      "userId": "mqsw6ajeh9jxuvp8",
+      "name": "正山小种",
+      "origin": "福建武夷山",
+      "year": 2023,
+      "imageUrl": "data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='200' height='200' viewBox='0 0 200 200'><defs><linearGradient id='g' x1='0' y1='0' x2='1' y2='1'><stop offset='0%' stop-color='#fff3e0'/><stop offset='100%' stop-color='#ffcc80'/></linearGradient></defs><rect width='200' height='200' fill='url(#g)'/><text x='50%' y='52%' dominant-baseline='middle' text-anchor='middle' font-size='72'>🌿</text><text x='50%' y='88%' dominant-baseline='middle' text-anchor='middle' font-size='16' font-weight='bold' fill='#5d4037' font-family='sans-serif'>小</text></svg>",
+      "isFavorite": false,
+      "id": "mqswixtk9sbbbnxi",
+      "createdAt": "2026-06-25T02:47:15.128Z"
+    },
+    {
+      "userId": "mqsw6ajeh9jxuvp8",
+      "name": "正山小种",
+      "origin": "福建武夷山",
+      "year": 2023,
+      "imageUrl": "data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='200' height='200' viewBox='0 0 200 200'><defs><linearGradient id='g' x1='0' y1='0' x2='1' y2='1'><stop offset='0%' stop-color='#fff3e0'/><stop offset='100%' stop-color='#ffcc80'/></linearGradient></defs><rect width='200' height='200' fill='url(#g)'/><text x='50%' y='52%' dominant-baseline='middle' text-anchor='middle' font-size='72'>🌿</text><text x='50%' y='88%' dominant-baseline='middle' text-anchor='middle' font-size='16' font-weight='bold' fill='#5d4037' font-family='sans-serif'>小</text></svg>",
+      "isFavorite": false,
+      "id": "mqswixtofmszcec0",
+      "createdAt": "2026-06-25T02:47:15.132Z"
+    },
+    {
+      "userId": "mqsw6ajeh9jxuvp8",
+      "name": "福鼎白茶",
+      "origin": "福建福鼎",
+      "year": 2022,
+      "imageUrl": "data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='200' height='200' viewBox='0 0 200 200'><defs><linearGradient id='g' x1='0' y1='0' x2='1' y2='1'><stop offset='0%' stop-color='#f3e5f5'/><stop offset='100%' stop-color='#ce93d8'/></linearGradient></defs><rect width='200' height='200' fill='url(#g)'/><text x='50%' y='52%' dominant-baseline='middle' text-anchor='middle' font-size='72'>🫖</text><text x='50%' y='88%' dominant-baseline='middle' text-anchor='middle' font-size='16' font-weight='bold' fill='#5d4037' font-family='sans-serif'>白</text></svg>",
+      "isFavorite": false,
+      "id": "mqswixtu7az07pb7",
+      "createdAt": "2026-06-25T02:47:15.138Z"
+    },
+    {
+      "userId": "mqsw6ajeh9jxuvp8",
+      "name": "福鼎白茶",
+      "origin": "福建福鼎",
+      "year": 2022,
+      "imageUrl": "data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='200' height='200' viewBox='0 0 200 200'><defs><linearGradient id='g' x1='0' y1='0' x2='1' y2='1'><stop offset='0%' stop-color='#f3e5f5'/><stop offset='100%' stop-color='#ce93d8'/></linearGradient></defs><rect width='200' height='200' fill='url(#g)'/><text x='50%' y='52%' dominant-baseline='middle' text-anchor='middle' font-size='72'>🫖</text><text x='50%' y='88%' dominant-baseline='middle' text-anchor='middle' font-size='16' font-weight='bold' fill='#5d4037' font-family='sans-serif'>白</text></svg>",
+      "isFavorite": false,
+      "id": "mqswixtx39nmn2nq",
+      "createdAt": "2026-06-25T02:47:15.141Z"
+    },
+    {
+      "userId": "mqsw6ajeh9jxuvp8",
+      "name": "大红袍",
+      "origin": "福建武夷山",
+      "year": 2021,
+      "imageUrl": "data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='200' height='200' viewBox='0 0 200 200'><defs><linearGradient id='g' x1='0' y1='0' x2='1' y2='1'><stop offset='0%' stop-color='#e0f7fa'/><stop offset='100%' stop-color='#80deea'/></linearGradient></defs><rect width='200' height='200' fill='url(#g)'/><text x='50%' y='52%' dominant-baseline='middle' text-anchor='middle' font-size='72'>🍂</text><text x='50%' y='88%' dominant-baseline='middle' text-anchor='middle' font-size='16' font-weight='bold' fill='#5d4037' font-family='sans-serif'>袍</text></svg>",
+      "isFavorite": false,
+      "id": "mqswixu2os23tv3h",
+      "createdAt": "2026-06-25T02:47:15.146Z"
+    }
+  ],
+  "tastings": []
+}

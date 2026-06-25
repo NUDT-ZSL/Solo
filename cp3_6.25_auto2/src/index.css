@@ -1,0 +1,101 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+body {
+  margin: 0;
+  background: #fafafa;
+  color: #333;
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'PingFang SC', 'Hiragino Sans GB', 'Microsoft YaHei', sans-serif;
+}
+
+@keyframes fadeIn {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+.fade-in {
+  animation: fadeIn 0.5s ease-out both;
+}
+
+.page-slide-enter {
+  transform: translateX(100%);
+  animation: slideIn 0.3s ease forwards;
+}
+
+.page-slide-exit {
+  transform: translateX(0);
+  animation: slideOut 0.3s ease forwards;
+}
+
+@keyframes slideIn {
+  from {
+    transform: translateX(100%);
+  }
+  to {
+    transform: translateX(0);
+  }
+}
+
+@keyframes slideOut {
+  from {
+    transform: translateX(0);
+  }
+  to {
+    transform: translateX(-100%);
+  }
+}
+
+input[type='range'] {
+  -webkit-appearance: none;
+  appearance: none;
+  width: 220px;
+  height: 6px;
+  border-radius: 3px;
+  background: linear-gradient(to right, #e0e0e0, #7b1fa2);
+  outline: none;
+}
+
+input[type='range']::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  appearance: none;
+  width: 18px;
+  height: 18px;
+  border-radius: 50%;
+  background: #7b1fa2;
+  border: 2px solid #fff;
+  box-shadow: 0 2px 4px rgba(123, 31, 162, 0.3);
+  cursor: pointer;
+}
+
+input[type='range']::-moz-range-thumb {
+  width: 18px;
+  height: 18px;
+  border-radius: 50%;
+  background: #7b1fa2;
+  border: 2px solid #fff;
+  box-shadow: 0 2px 4px rgba(123, 31, 162, 0.3);
+  cursor: pointer;
+}
+
+textarea {
+  transition: all 0.2s;
+}
+
+textarea:focus {
+  outline: none;
+  border-color: #7b1fa2;
+  background: rgba(123, 31, 162, 0.03);
+}
+
+button {
+  transition: all 0.2s ease;
+}
+
+button:hover:not(:disabled) {
+  filter: brightness(1.05);
+}
