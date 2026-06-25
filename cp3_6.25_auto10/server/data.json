@@ -1,0 +1,81 @@
+{
+  "projects": [
+    {
+      "id": "proj-001",
+      "name": "智能办公协作平台",
+      "description": "一个集项目管理、文档协作、即时通讯于一体的企业级SaaS平台"
+    }
+  ],
+  "features": [
+    {
+      "id": "feat-001",
+      "projectId": "proj-001",
+      "name": "任务看板",
+      "module": "项目管理",
+      "likes": ["m1", "m2", "m3"],
+      "dislikes": ["m5"],
+      "order": 1,
+      "tasks": [
+        { "id": "task-001", "name": "拖拽排序实现", "completed": true },
+        { "id": "task-002", "name": "多视图切换(看板/列表)", "completed": false },
+        { "id": "task-003", "name": "任务优先级标签", "completed": true }
+      ],
+      "comments": [
+        { "id": "c-001", "author": "张三", "content": "看板功能很实用，建议增加甘特图视图", "timestamp": "2026-06-20T10:30:00Z" },
+        { "id": "c-002", "author": "李四", "content": "拖拽流畅度还可以优化", "timestamp": "2026-06-21T14:15:00Z" }
+      ]
+    },
+    {
+      "id": "feat-002",
+      "projectId": "proj-001",
+      "name": "实时文档协作",
+      "module": "文档协作",
+      "likes": ["m1", "m4", "m5", "m6"],
+      "dislikes": [],
+      "order": 2,
+      "tasks": [
+        { "id": "task-004", "name": "多人光标同步", "completed": true },
+        { "id": "task-005", "name": "文档版本历史", "completed": true },
+        { "id": "task-006", "name": "评论与批注功能", "completed": false },
+        { "id": "task-007", "name": "富文本编辑器集成", "completed": true }
+      ],
+      "comments": [
+        { "id": "c-003", "author": "王五", "content": "支持Markdown导入导出吗？", "timestamp": "2026-06-22T09:00:00Z" }
+      ]
+    },
+    {
+      "id": "feat-003",
+      "projectId": "proj-001",
+      "name": "即时通讯",
+      "module": "沟通协作",
+      "likes": ["m2", "m3"],
+      "dislikes": ["m1", "m4"],
+      "order": 3,
+      "tasks": [
+        { "id": "task-008", "name": "WebSocket连接管理", "completed": true },
+        { "id": "task-009", "name": "群聊与单聊", "completed": true },
+        { "id": "task-010", "name": "文件消息上传", "completed": false }
+      ],
+      "comments": []
+    },
+    {
+      "id": "feat-004",
+      "projectId": "proj-001",
+      "name": "数据统计仪表盘",
+      "module": "数据分析",
+      "likes": ["m1", "m2", "m5", "m7", "m8"],
+      "dislikes": ["m3"],
+      "order": 4,
+      "tasks": [
+        { "id": "task-011", "name": "图表组件集成(Chart.js)", "completed": true },
+        { "id": "task-012", "name": "自定义时间范围筛选", "completed": false },
+        { "id": "task-013", "name": "数据导出Excel", "completed": false },
+        { "id": "task-014", "name": "权限控制(管理员/普通用户)", "completed": true }
+      ],
+      "comments": [
+        { "id": "c-004", "author": "赵六", "content": "仪表盘加载速度有点慢，建议后端做缓存", "timestamp": "2026-06-23T16:45:00Z" },
+        { "id": "c-005", "author": "孙七", "content": "希望能支持自定义图表布局", "timestamp": "2026-06-24T11:20:00Z" }
+      ]
+    }
+  ]
+}
